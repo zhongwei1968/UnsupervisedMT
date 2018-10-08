@@ -239,7 +239,7 @@ if __name__ == '__main__':
     # initialize experiment / load data / build model
     logger = initialize_exp(params)
     data = load_data(params)
-    encoder, decoder, discriminator, lm = build_mt_model(params, data)
+    encoder, decoder, discriminator, lm = build_mt_model(params, data, cuda=False)
 
     # initialize trainer / reload checkpoint / initialize evaluator
     trainer = TrainerMT(encoder, decoder, discriminator, lm, data, params)
