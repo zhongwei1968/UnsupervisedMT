@@ -226,6 +226,8 @@ parser.add_argument("--beam_size", type=int, default=0,
                     help="Beam width (<= 0 means greedy)")
 parser.add_argument("--length_penalty", type=float, default=1.0,
                     help="Length penalty: <1.0 favors shorter, >1.0 favors longer sentences")
+parser.add_argument("--cuda", type=bool_flag, default=True,
+                    help="use cuda for training and reference")
 params = parser.parse_args()
 
 
@@ -239,7 +241,7 @@ if __name__ == '__main__':
     # initialize experiment / load data / build model
     logger = initialize_exp(params)
     data = load_data(params)
-    encoder, decoder, discriminator, lm = build_mt_model(params, data, cuda=False)
+    encoder, decoder, discriminator, lm = build_mt_model(params, data, cuda=params.cuda)
 
     # initialize trainer / reload checkpoint / initialize evaluator
     trainer = TrainerMT(encoder, decoder, discriminator, lm, data, params)
