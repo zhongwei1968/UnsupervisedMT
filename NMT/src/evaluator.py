@@ -14,6 +14,10 @@ import torch
 from torch import nn
 
 from .utils import restore_segmentation
+from os import path
+import sys
+sys.path.append(path.abspath('../../OpenNMT-py'))
+from onmt.inputters.inputter import build_dataset_iter, lazily_load_dataset
 
 
 logger = getLogger()
@@ -78,6 +82,19 @@ class EvaluatorMT(object):
             for batch in dataset.get_iterator(shuffle=False, group_by_size=True)():
                 yield batch if lang1 < lang2 else batch[::-1]
 
+    def get_speech_iterator(self, data_type, lang1, lang2):
+        """
+        Create a new iterator for a dataset.
+        """
+        assert data_type in ['valid']
+        speech_direction = (lang1, lang2)
+        iterator = build_dataset_iter(
+            lazily_load_dataset(data_type, self.params.speech_dataset[speech_direction][0]),
+                                        self.params.speech_fields[speech_direction], self.params, False)
+        iterator = iter(iterator)
+        for batch in iterator:
+            yield batch
+
     def create_reference_files(self):
         """
         Create reference files for BLEU evaluation.
@@ -121,6 +138,26 @@ class EvaluatorMT(object):
                 # store data paths
                 params.ref_paths[(lang2, lang1, data_type)] = lang1_path
                 params.ref_paths[(lang1, lang2, data_type)] = lang2_path
+
+        for lang1, lang2 in self.data['para'].keys():
+            data_type = 'valid'
+            for lang_tgt in [lang1,lang2]:
+                lang_path = os.path.join(params.dump_path, 'speech-ref.{0}-{1}.{2}.txt'.format(lang2, lang_tgt, data_type))
+                lang_txt = []
+                for speech_batch in self.get_speech_iterator(data_type, lang2, lang_tgt):
+                    for index in speech_batch.indices:
+                        lang_txt.extend(' '.join(speech_batch.dataset.examples[index].tgt))
+                # replace <unk> by <<unk>> as these tokens cannot be counted in BLEU
+                lang_txt = [x.replace('<unk>', '<<unk>>') for x in lang_txt]
+
+                # export hypothesis
+                with open(lang_path, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(lang_txt) + '\n')
+                # restore original segmentation
+                restore_segmentation(lang_path)
+                # store data paths
+                params.ref_paths[(lang2, lang_tgt, 'speech-'+ data_type)] = lang_path
+
 
     def eval_para(self, lang1, lang2, data_type, scores):
         """
@@ -179,6 +216,66 @@ class EvaluatorMT(object):
         # update scores
         scores['ppl_%s_%s_%s' % (lang1, lang2, data_type)] = np.exp(xe_loss / count)
         scores['bleu_%s_%s_%s' % (lang1, lang2, data_type)] = bleu
+
+    def eval_speech(self, lang1, lang2, data_type, scores):
+        """
+        Evaluate lang1 -> lang2 perplexity and BLEU scores.
+        """
+        logger.info("Evaluating speech %s -> %s (%s) ..." % (lang1, lang2, data_type))
+        assert data_type in ['valid', 'test']
+        self.encoder.eval()
+        self.decoder.eval()
+        params = self.params
+        lang1_id = params.lang2id[lang1]
+        lang2_id = params.lang2id[lang2]
+
+        # hypothesis
+        txt = []
+
+        # for perplexity
+        loss_fn2 = nn.CrossEntropyLoss(weight=self.decoder.loss_fn[lang2_id].weight, size_average=False)
+        n_words2 = self.params.n_words[lang2_id]
+        count = 0
+        xe_loss = 0
+
+        for speech_batch in self.get_speech_iterator(data_type, lang1, lang2):
+
+            sent2 = speech_batch.tgt
+            len2 = torch.ones((2,), dtype=torch.int32)
+            len2 = len2.new_full((sent2.size(1),), len(sent2))
+
+            if self.params.cuda:
+                speech_batch.src, sent2 = speech_batch.src.cuda(), sent2.cuda()
+
+            # encode / decode / generate
+            encoded = self.encoder(speech_batch.src, 0, lang1_id)
+            decoded = self.decoder(encoded, sent2[:-1], lang2_id)
+            sent2_, len2_, _ = self.decoder.generate(encoded, lang2_id)
+
+            # cross-entropy loss
+            xe_loss += loss_fn2(decoded.view(-1, n_words2), sent2[1:].view(-1)).item()
+            count += (len2 - 1).sum().item()  # skip BOS word
+
+            # convert to text
+            txt.extend(convert_to_text(sent2_, len2_, self.dico[lang2], lang2_id, self.params))
+
+        # hypothesis / reference paths
+        hyp_name = 'speech_hyp{0}.{1}-{2}.{3}.txt'.format(scores['epoch'], lang1, lang2, data_type)
+        hyp_path = os.path.join(params.dump_path, hyp_name)
+        ref_path = params.ref_paths[(lang1, lang2, 'speech-' + data_type)]
+
+        # export sentences to hypothesis file / restore BPE segmentation
+        with open(hyp_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(txt) + '\n')
+        restore_segmentation(hyp_path)
+
+        # evaluate BLEU score
+        bleu = eval_moses_bleu(ref_path, hyp_path)
+        logger.info("Speech BLEU %s %s : %f" % (hyp_path, ref_path, bleu))
+
+        # update scores
+        scores['speech_ppl_%s_%s_%s' % (lang1, lang2, data_type)] = np.exp(xe_loss / count)
+        scores['speech_bleu_%s_%s_%s' % (lang1, lang2, data_type)] = bleu
 
     def eval_back(self, lang1, lang2, lang3, data_type, scores):
         """
@@ -258,9 +355,10 @@ class EvaluatorMT(object):
         with torch.no_grad():
 
             for lang1, lang2 in self.data['para'].keys():
-                for data_type in ['valid', 'test']:
+                for data_type in ['valid']:
                     self.eval_para(lang1, lang2, data_type, scores)
-                    self.eval_para(lang2, lang1, data_type, scores)
+                    self.eval_speech(lang2, lang1, data_type, scores)
+
 
             for lang1, lang2, lang3 in self.params.pivo_directions:
                 for data_type in ['valid', 'test']:

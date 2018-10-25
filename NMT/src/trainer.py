@@ -18,6 +18,11 @@ from .utils import get_optimizer, parse_lambda_config, update_lambdas
 from .model import build_mt_model
 from .multiprocessing_event_loop import MultiprocessingEventLoop
 from .test import test_sharing
+from os import path
+import sys
+sys.path.append(path.abspath('../../OpenNMT-py'))
+from onmt.inputters.inputter import build_dataset_iter, lazily_load_dataset, \
+    _load_fields, _collect_report_features, _load_fields_vocab
 
 
 logger = getLogger()
@@ -38,6 +43,10 @@ class TrainerMT(MultiprocessingEventLoop):
         self.lm = lm
         self.data = data
         self.params = params
+        self.train_iter = None
+        self.speech_fields = dict()
+        params.speech_fields = self.speech_fields
+
 
         # initialization for on-the-fly generation/training
         if len(params.pivo_directions) > 0:
@@ -76,6 +85,7 @@ class TrainerMT(MultiprocessingEventLoop):
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid', 'test']:
                     self.VALIDATION_METRICS.append('bleu_%s_%s_%s' % (lang1, lang2, data_type))
+                    self.VALIDATION_METRICS.append('speech_bleu_%s_%s_%s' % (lang1, lang2, data_type))
             for lang1, lang2, lang3 in self.params.pivo_directions:
                 if lang1 == lang3:
                     continue
@@ -108,6 +118,18 @@ class TrainerMT(MultiprocessingEventLoop):
             'processed_s': 0,
             'processed_w': 0,
         }
+        for lang1, lang2 in params.speech_directions:
+            self.stats['xe_costs_sp_%s_%s' % (lang1, lang2)] = []
+        for speech_direction in params.speech_directions:
+            # Peek the first dataset to determine the data_type.
+            # (All datasets have the same data_type).
+            first_dataset = next(lazily_load_dataset("train", params.speech_dataset[speech_direction][0]))
+            data_type = first_dataset.data_type
+            # Load fields generated from preprocess phase.
+            fields = _load_fields_vocab(first_dataset, data_type, params.speech_vocabs[speech_direction[1]], None,
+                                        'vocab')
+            self.speech_fields[speech_direction] = fields
+
         for lang in params.mono_directions:
             self.stats['xe_costs_%s_%s' % (lang, lang)] = []
         for lang1, lang2 in params.para_directions:
@@ -167,6 +189,20 @@ class TrainerMT(MultiprocessingEventLoop):
         self.iterators[key] = iterator
         return iterator
 
+    def get_speech_iterator(self, name, lang1, lang2, is_train=True): # name: train or valid
+        """
+        Create a new iterator for a dataset.
+        """
+        key = ','.join([x for x in ['speech', name, lang1, lang2] if x is not None])
+        logger.info("Creating new training %s iterator ..." % key)
+        speech_direction = (lang1, lang2)
+        iterator = build_dataset_iter(
+            lazily_load_dataset(name, self.params.speech_dataset[speech_direction][0]),
+                                        self.speech_fields[speech_direction], self.params, is_train)
+        iterator = iter(iterator)
+        self.iterators[key] = iterator
+        return iterator
+
     def get_batch(self, iter_name, lang1, lang2, back=False):
         """
         Return a batch of sentences from a dataset.
@@ -184,6 +220,23 @@ class TrainerMT(MultiprocessingEventLoop):
             iterator = self.get_iterator(iter_name, lang1, lang2, back)
             batch = next(iterator)
         return batch if (lang2 is None or lang1 < lang2 or back) else batch[::-1]
+
+    def get_speech_batch(self, iter_name, lang1, lang2):
+        """
+        Return a batch of sentences from a dataset.
+        """
+        assert lang1 in self.params.langs
+        assert lang2 is None or lang2 in self.params.langs
+        key = ','.join([x for x in ['speech', iter_name, lang1, lang2] if x is not None])
+        iterator = self.iterators.get(key, None)
+        if iterator is None:
+            iterator = self.get_speech_iterator(iter_name, lang1, lang2)
+        try:
+            batch = next(iterator)
+        except StopIteration:
+            iterator = self.get_speech_iterator(iter_name, lang1, lang2)
+            batch = next(iterator)
+        return batch
 
     def word_shuffle(self, x, l, lang_id):
         """
@@ -508,6 +561,66 @@ class TrainerMT(MultiprocessingEventLoop):
         # number of processed sentences / words
         self.stats['processed_s'] += len2.size(0)
         self.stats['processed_w'] += len2.sum()
+
+
+    def speech_enc_dec_step(self,  lang1, lang2, lambda_xe):
+        """
+        Source / target autoencoder training (parallel data):
+            - encoders / decoders training on cross-entropy
+            - encoders training on discriminator feedback
+            - encoders training on L2 loss (seq2seq only, not for attention)
+        """
+        params = self.params
+        assert lang1 in params.langs and lang2 in params.langs
+        lang1_id = params.lang2id[lang1]
+        lang2_id = params.lang2id[lang2]
+        loss_fn = self.decoder.loss_fn[lang2_id]
+        n_words = params.n_words[lang2_id]
+
+        speech_batch = self.get_speech_batch('train', lang1, lang2)
+        if speech_batch:
+            sent2 = speech_batch.tgt
+            len2 = torch.ones((2,), dtype=torch.int32)
+            len2 = len2.new_full((sent2.size(1), ), len(sent2))
+            # encoded states
+            encoded = self.encoder(speech_batch.src, 0, lang1_id)
+
+            # cross-entropy scores / loss
+            scores = self.decoder(encoded, sent2[:-1], lang2_id)
+            xe_loss = loss_fn(scores.view(-1, n_words), sent2[1:].view(-1))
+            self.stats['xe_costs_sp_%s_%s' % (lang1, lang2)].append(xe_loss.item())
+
+            # discriminator feedback loss
+            if params.lambda_dis:
+                predictions = self.discriminator(encoded.dis_input.view(-1, encoded.dis_input.size(-1)))
+                fake_y = torch.LongTensor(predictions.size(0)).random_(1, params.n_langs)
+                fake_y = (fake_y + lang1_id) % params.n_langs
+                if self.params.cuda:
+                    fake_y = fake_y.cuda()  # CUDA is True
+                dis_loss = F.cross_entropy(predictions, fake_y)
+
+            # total loss
+            assert lambda_xe > 0
+            loss = lambda_xe * xe_loss
+            if params.lambda_dis:
+                loss = loss + params.lambda_dis * dis_loss
+
+            # check NaN
+            if (loss != loss).data.any():
+                logger.error("NaN detected")
+                exit()
+
+            # optimizer
+            self.zero_grad(['enc', 'dec'])
+            loss.backward()
+            self.update_params(['enc', 'dec'])
+
+            # number of processed sentences / words
+            self.stats['processed_s'] += len2.size(0)
+            self.stats['processed_w'] += len2.sum()
+
+        else:
+            logger.error("Can not get training batch ...")
 
     def otf_start_multiprocessing(self):
         logger.info("Starting subprocesses for OTF generation ...")

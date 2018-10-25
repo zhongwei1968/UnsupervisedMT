@@ -228,8 +228,31 @@ parser.add_argument("--length_penalty", type=float, default=1.0,
                     help="Length penalty: <1.0 favors shorter, >1.0 favors longer sentences")
 parser.add_argument("--cuda", type=bool_flag, default=True,
                     help="use cuda for training and reference")
-params = parser.parse_args()
+parser.add_argument("--gpu_ranks", default=[], nargs='+', type=int,
+                       help="list of ranks of each process.")
+parser.add_argument("--speech_dataset",  type=str, default="fr-en:../../OpenNMT-py/data/speech/test",
+                    help="Speech dataset: fr-en is ASR, fr-fr is AST")
+parser.add_argument("--speech_vocabs",  type=str, default="fr-en:data/mono/vocab.en.20000",
+                    help="External vocab file for audio data target")
+parser.add_argument("--lambda_speech", type=str, default="0",
+                    help="Cross-entropy reconstruction coefficient (speech data)")
+parser.add_argument("--batch_type", type=str, default="sents",
+                    help="""Batch grouping for batch_size. Standard
+                           is sents. Tokens will do dynamic batching""")
+# Options most relevant to speech
 
+parser.add_argument("--speech_directions", type=str, default="",
+                    help="Speech Training directions (lang2-lang1,lang2-lang2)")
+parser.add_argument('--speech_input', type=bool_flag, default=True,
+                   help="speech input for encoder 1, text input for encoder 0")
+parser.add_argument('--sample_rate', type=int, default=16000,
+                   help="Sample rate.")
+parser.add_argument('--window_size', type=float, default=.02,
+                   help="Window size for spectrogram in seconds.")
+parser.add_argument("--valid_batch_size", type=int, default=32,
+                    help="valid Batch size")
+
+params = parser.parse_args()
 
 if __name__ == '__main__':
 
@@ -291,6 +314,11 @@ if __name__ == '__main__':
             if params.lambda_xe_para > 0:
                 for lang1, lang2 in params.para_directions:
                     trainer.enc_dec_step(lang1, lang2, params.lambda_xe_para)
+
+            # speech  training
+            if params.lambda_speech == "1":
+                for lang1, lang2 in params.speech_directions:
+                    trainer.speech_enc_dec_step(lang1, lang2, params.lambda_xe_para)
 
             # MT training (back-parallel data)
             if params.lambda_xe_back > 0:

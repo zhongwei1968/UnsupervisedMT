@@ -54,7 +54,7 @@ def test_sharing(encoder, decoder, lm, params):
     # encoder
     #
     # embedding layers
-    if params.share_lang_emb:
+    if params.share_lang_emb and not params.speech_input:
         for i in range(1, params.n_langs):
             assert_equal(encoder.embeddings[i].weight, encoder.embeddings[0].weight)
     # LSTM layers

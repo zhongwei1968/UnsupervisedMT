@@ -20,6 +20,8 @@ from ..modules.sinusoidal_positional_embedding import SinusoidalPositionalEmbedd
 from ..sequence_generator import SequenceGenerator
 
 from . import LatentState
+from .audio_encoder import AudioEncoder
+
 
 
 logger = getLogger()
@@ -44,6 +46,10 @@ class TransformerEncoder(nn.Module):
             embeddings = [layer_0 for _ in range(self.n_langs)]
         else:
             embeddings = [Embedding(n_words, embed_dim, padding_idx=args.pad_index) for n_words in self.n_words]
+        if args.speech_input:
+            audio_enc = AudioEncoder(args.sample_rate, args.window_size, embed_dim)
+            embeddings[1] = audio_enc
+
         self.embeddings = nn.ModuleList(embeddings)
         self.freeze_enc_emb = args.freeze_enc_emb
 
@@ -78,14 +84,22 @@ class TransformerEncoder(nn.Module):
 
         embed_tokens = self.embeddings[lang_id]
 
-        # embed tokens and positions
-        x = self.embed_scale * embed_tokens(src_tokens)
-        x = x.detach() if self.freeze_enc_emb else x
-        x += self.embed_positions(src_tokens)
-        x = F.dropout(x, p=self.dropout, training=self.training)
-
-        # compute padding mask
-        encoder_padding_mask = src_tokens.t().eq(self.padding_idx)
+        if isinstance(embed_tokens, AudioEncoder):
+            x = embed_tokens(src_tokens)
+            x_pos = x[:, :, 0].type('torch.LongTensor')
+            x += self.embed_positions(x_pos)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+            encoder_padding_mask = None
+            src_lengths = torch.ones((2,), dtype=torch.int32)
+            src_lengths = src_lengths.new_full((x.size(1), ), len(x))
+        else:
+            # embed tokens and positions
+            x = self.embed_scale * embed_tokens(src_tokens)
+            x = x.detach() if self.freeze_enc_emb else x
+            x += self.embed_positions(src_tokens)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+            # compute padding mask
+            encoder_padding_mask = src_tokens.t().eq(self.padding_idx)
 
         # encoder layers
         for layer in self.layers:

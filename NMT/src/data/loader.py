@@ -427,8 +427,8 @@ def check_all_data_params(params):
             assert (lang1, lang2) in params.back_dataset
 
     # check all monolingual datasets are used
-    for lang, _ in params.mono_dataset.items():
-        assert lang in params.mono_directions or any(lang1 == lang3 == lang for (lang1, _, lang3) in params.pivo_directions)
+    # for lang, _ in params.mono_dataset.items():
+    #    assert lang in params.mono_directions or any(lang1 == lang3 == lang for (lang1, _, lang3) in params.pivo_directions)
 
     # check all parallel datasets are used
     for (lang1, lang2), (train_path, _, _) in params.para_dataset.items():
@@ -438,6 +438,32 @@ def check_all_data_params(params):
                 any((lang1 == _lang1 and lang2 == _lang2) or (lang1 == _lang2 and lang2 == _lang1) or
                     (lang1 == _lang1 and lang2 == _lang3) or (lang1 == _lang3 and lang2 == _lang1)
                     for _lang1, _lang2, _lang3 in params.pivo_directions))
+    # check speech datasets
+    params.speech_dataset = {k: v for k, v in [x.split(':') for x in params.speech_dataset.split(';') if len(x) > 0]}
+    assert type(params.para_dataset) is dict
+    assert all(len(k.split('-')) == 2 for k in params.speech_dataset.keys())
+    params.speech_dataset = {tuple(k.split('-')): tuple(v.split(',')) for k, v in params.speech_dataset.items()}
+    assert not (params.n_para == 0) ^ (all(v[0] == '' for v in params.speech_dataset.values()))
+    for (lang1, lang2), (data_set_path) in params.speech_dataset.items():
+        assert lang1 in params.langs and lang2 in params.langs
+
+    # check speech directions
+    params.speech_directions = [x.split('-') for x in params.speech_directions.split(',') if len(x) > 0]
+    if len(params.speech_directions) > 0:
+        assert type(params.speech_directions) is list
+        assert all(len(x) == 2 for x in params.speech_directions)
+        params.speech_directions = [tuple(x) for x in params.speech_directions]
+        assert len(params.speech_directions) == len(set(params.speech_directions))
+        # check that every direction has an associated train set
+        for lang1, lang2 in params.speech_directions:
+            assert lang1 in params.langs and lang2 in params.langs
+            k = (lang1, lang2)
+            assert k in params.speech_dataset
+            assert params.speech_dataset[k][0] != ''
+    # check speech datasets
+    params.speech_vocabs = {k: v for k, v in
+                                 [x.split(':') for x in params.speech_vocabs.split(';') if len(x) > 0]}
+    assert type(params.para_dataset) is dict
 
     # check all back-parallel datasets are used
     for (lang1, lang2), _ in params.back_dataset.items():
