@@ -432,7 +432,7 @@ def check_all_data_params(params):
 
     # check all parallel datasets are used
     for (lang1, lang2), (train_path, _, _) in params.para_dataset.items():
-        assert (train_path == '' or
+        assert (True or train_path == '' or  # no need check as para_directions can be null
                 (lang1, lang2) in params.para_directions or
                 (lang2, lang1) in params.para_directions or
                 any((lang1 == _lang1 and lang2 == _lang2) or (lang1 == _lang2 and lang2 == _lang1) or
@@ -485,9 +485,11 @@ def check_all_data_params(params):
     assert not (params.lambda_dis == "0") ^ (params.n_dis == 0)
     assert not (params.lambda_xe_mono == "0") ^ (len(params.mono_directions) == 0)
     assert not (params.lambda_xe_para == "0") ^ (len(params.para_directions) == 0)
+    assert not (params.lambda_speech == "0") ^ (len(params.speech_directions) == 0)
     assert not (params.lambda_xe_back == "0") ^ (len(params.back_directions) == 0)
     assert not (params.lambda_xe_otfd == "0") ^ (len([True for _, lang2, lang3 in params.pivo_directions if lang2 != lang3]) == 0)
     assert not (params.lambda_xe_otfa == "0") ^ (len([True for _, lang2, lang3 in params.pivo_directions if lang2 == lang3]) == 0)
+    assert (params.lambda_speech == "1") or  (params.lambda_speech == "1" )
 
     # max length / max vocab / sentence noise
     assert params.max_len > 0

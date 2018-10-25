@@ -139,12 +139,11 @@ class EvaluatorMT(object):
                 params.ref_paths[(lang2, lang1, data_type)] = lang1_path
                 params.ref_paths[(lang1, lang2, data_type)] = lang2_path
 
-        for lang1, lang2 in self.data['para'].keys():
-            data_type = 'valid'
-            for lang_tgt in [lang1,lang2]:
-                lang_path = os.path.join(params.dump_path, 'speech-ref.{0}-{1}.{2}.txt'.format(lang2, lang_tgt, data_type))
+        for lang1, lang2 in self.params.speech_dataset.keys():
+                data_type = 'valid'
+                lang_path = os.path.join(params.dump_path, 'speech-ref.{0}-{1}.{2}.txt'.format(lang1, lang2, data_type))
                 lang_txt = []
-                for speech_batch in self.get_speech_iterator(data_type, lang2, lang_tgt):
+                for speech_batch in self.get_speech_iterator(data_type, lang1, lang2):
                     for index in speech_batch.indices:
                         lang_txt.extend(' '.join(speech_batch.dataset.examples[index].tgt))
                 # replace <unk> by <<unk>> as these tokens cannot be counted in BLEU
@@ -156,7 +155,7 @@ class EvaluatorMT(object):
                 # restore original segmentation
                 restore_segmentation(lang_path)
                 # store data paths
-                params.ref_paths[(lang2, lang_tgt, 'speech-'+ data_type)] = lang_path
+                params.ref_paths[(lang1, lang2, 'speech-'+ data_type)] = lang_path
 
 
     def eval_para(self, lang1, lang2, data_type, scores):
@@ -357,7 +356,9 @@ class EvaluatorMT(object):
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid']:
                     self.eval_para(lang1, lang2, data_type, scores)
-                    self.eval_speech(lang2, lang1, data_type, scores)
+            for lang1, lang2 in self.params.speech_dataset.keys():
+                for data_type in ['valid']:
+                    self.eval_speech(lang1, lang2, data_type, scores)
 
 
             for lang1, lang2, lang3 in self.params.pivo_directions:

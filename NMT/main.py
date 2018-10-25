@@ -316,9 +316,9 @@ if __name__ == '__main__':
                     trainer.enc_dec_step(lang1, lang2, params.lambda_xe_para)
 
             # speech  training
-            if params.lambda_speech == "1":
+            if params.lambda_speech > 0:
                 for lang1, lang2 in params.speech_directions:
-                    trainer.speech_enc_dec_step(lang1, lang2, params.lambda_xe_para)
+                    trainer.speech_enc_dec_step(lang1, lang2, params.lambda_speech)
 
             # MT training (back-parallel data)
             if params.lambda_xe_back > 0:

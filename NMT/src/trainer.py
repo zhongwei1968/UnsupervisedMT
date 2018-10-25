@@ -118,9 +118,9 @@ class TrainerMT(MultiprocessingEventLoop):
             'processed_s': 0,
             'processed_w': 0,
         }
-        for lang1, lang2 in params.speech_directions:
+        for lang1, lang2 in params.speech_dataset.keys():
             self.stats['xe_costs_sp_%s_%s' % (lang1, lang2)] = []
-        for speech_direction in params.speech_directions:
+        for speech_direction in params.speech_dataset.keys():
             # Peek the first dataset to determine the data_type.
             # (All datasets have the same data_type).
             first_dataset = next(lazily_load_dataset("train", params.speech_dataset[speech_direction][0]))
@@ -161,6 +161,8 @@ class TrainerMT(MultiprocessingEventLoop):
         parse_lambda_config(params, 'lambda_xe_otfa')
         parse_lambda_config(params, 'lambda_dis')
         parse_lambda_config(params, 'lambda_lm')
+        parse_lambda_config(params, 'lambda_speech')
+
 
     def init_bpe(self):
         """
