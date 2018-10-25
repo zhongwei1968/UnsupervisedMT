@@ -117,7 +117,8 @@ def get_dump_path(params):
             assert exp_id.isdigit()
         params.exp_id = exp_id
     else:
-        assert os.path.isdir(os.path.join(sweep_path, params.exp_id))  # reload an experiment
+        if not os.path.isdir(os.path.join(sweep_path, params.exp_id)): # reload an experiment
+            logger.warning('New experiment at %s' % os.path.join(sweep_path, params.exp_id))
 
     # create the dump folder / update parameters
     params.dump_path = os.path.join(sweep_path, params.exp_id)
