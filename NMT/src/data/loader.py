@@ -443,7 +443,6 @@ def check_all_data_params(params):
     assert type(params.para_dataset) is dict
     assert all(len(k.split('-')) == 2 for k in params.speech_dataset.keys())
     params.speech_dataset = {tuple(k.split('-')): tuple(v.split(',')) for k, v in params.speech_dataset.items()}
-    assert not (params.n_para == 0) ^ (all(v[0] == '' for v in params.speech_dataset.values()))
     for (lang1, lang2), (data_set_path) in params.speech_dataset.items():
         assert lang1 in params.langs and lang2 in params.langs
 
@@ -489,7 +488,7 @@ def check_all_data_params(params):
     assert not (params.lambda_xe_back == "0") ^ (len(params.back_directions) == 0)
     assert not (params.lambda_xe_otfd == "0") ^ (len([True for _, lang2, lang3 in params.pivo_directions if lang2 != lang3]) == 0)
     assert not (params.lambda_xe_otfa == "0") ^ (len([True for _, lang2, lang3 in params.pivo_directions if lang2 == lang3]) == 0)
-    assert (params.lambda_speech == "1") or  (params.lambda_speech == "1" )
+    assert (params.lambda_xe_para == "1") or  (params.lambda_speech == "1" )
 
     # max length / max vocab / sentence noise
     assert params.max_len > 0

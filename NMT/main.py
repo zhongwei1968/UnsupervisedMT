@@ -230,9 +230,9 @@ parser.add_argument("--cuda", type=bool_flag, default=True,
                     help="use cuda for training and reference")
 parser.add_argument("--gpu_ranks", default=[], nargs='+', type=int,
                        help="list of ranks of each process.")
-parser.add_argument("--speech_dataset",  type=str, default="fr-en:../../OpenNMT-py/data/speech/test",
+parser.add_argument("--speech_dataset",  type=str, default="",
                     help="Speech dataset: fr-en is ASR, fr-fr is AST")
-parser.add_argument("--speech_vocabs",  type=str, default="fr-en:data/mono/vocab.en.20000",
+parser.add_argument("--speech_vocabs",  type=str, default="",
                     help="External vocab file for audio data target")
 parser.add_argument("--lambda_speech", type=str, default="0",
                     help="Cross-entropy reconstruction coefficient (speech data)")
