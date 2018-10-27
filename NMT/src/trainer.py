@@ -586,6 +586,7 @@ class TrainerMT(MultiprocessingEventLoop):
             len2 = len2.new_full((sent2.size(1), ), len(sent2))
             if self.params.cuda:  # CUDA is True
                 speech_batch.src = speech_batch.src.cuda()
+                sent2 = sent2.cuda()
             # encoded states
             encoded = self.encoder(speech_batch.src, 0, lang1_id)
 
