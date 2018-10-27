@@ -82,17 +82,23 @@ class TransformerEncoder(nn.Module):
 
     def forward(self, src_tokens, src_lengths, lang_id):
         assert type(lang_id) is int
+        is_cuda = src_tokens.is_cuda
 
         embed_tokens = self.embeddings[lang_id]
         if not embed_tokens:
             embed_tokens = self.audio_enc
             x = embed_tokens(src_tokens)
             x_pos = x[:, :, 0].type('torch.LongTensor')
+            if is_cuda:
+                x_pos = x_pos.cuda()
             x += self.embed_positions(x_pos)
             x = F.dropout(x, p=self.dropout, training=self.training)
             encoder_padding_mask = None
             src_lengths = torch.ones((2,), dtype=torch.int32)
             src_lengths = src_lengths.new_full((x.size(1), ), len(x))
+            if is_cuda:
+                src_lengths = src_lengths.cuda()
+
         else:
             # embed tokens and positions
             x = self.embed_scale * embed_tokens(src_tokens)
