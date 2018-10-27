@@ -46,9 +46,10 @@ class TransformerEncoder(nn.Module):
             embeddings = [layer_0 for _ in range(self.n_langs)]
         else:
             embeddings = [Embedding(n_words, embed_dim, padding_idx=args.pad_index) for n_words in self.n_words]
+        self.audio_enc = None
         if args.speech_input:
-            audio_enc = AudioEncoder(args.sample_rate, args.window_size, embed_dim)
-            embeddings[1] = audio_enc
+            self.audio_enc = AudioEncoder(args.sample_rate, args.window_size, embed_dim)
+            embeddings[1] = None
 
         self.embeddings = nn.ModuleList(embeddings)
         self.freeze_enc_emb = args.freeze_enc_emb
@@ -83,8 +84,8 @@ class TransformerEncoder(nn.Module):
         assert type(lang_id) is int
 
         embed_tokens = self.embeddings[lang_id]
-
-        if isinstance(embed_tokens, AudioEncoder):
+        if not embed_tokens:
+            embed_tokens = self.audio_enc
             x = embed_tokens(src_tokens)
             x_pos = x[:, :, 0].type('torch.LongTensor')
             x += self.embed_positions(x_pos)

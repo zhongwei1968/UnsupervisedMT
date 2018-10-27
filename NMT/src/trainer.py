@@ -56,7 +56,7 @@ class TrainerMT(MultiprocessingEventLoop):
         # decoder are optimized by the decoder optimizer)
         enc_params = list(encoder.parameters())
         for i in range(params.n_langs):
-            if params.share_lang_emb and i > 0:
+            if params.share_lang_emb and i >= 0:
                 break
             assert enc_params[i].size() == (params.n_words[i], params.emb_dim)
         if self.params.share_encdec_emb:
