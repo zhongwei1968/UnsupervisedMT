@@ -96,9 +96,6 @@ class TransformerEncoder(nn.Module):
             encoder_padding_mask = None
             src_lengths = torch.ones((2,), dtype=torch.int32)
             src_lengths = src_lengths.new_full((x.size(1), ), len(x))
-            if is_cuda:
-                src_lengths = src_lengths.cuda()
-
         else:
             # embed tokens and positions
             x = self.embed_scale * embed_tokens(src_tokens)

@@ -238,6 +238,9 @@ class TrainerMT(MultiprocessingEventLoop):
         except StopIteration:
             iterator = self.get_speech_iterator(iter_name, lang1, lang2)
             batch = next(iterator)
+        lang2_id = self.params.lang2id[lang2]
+        bos_index = self.params.bos_index[lang2_id]
+        batch.tgt[0] = bos_index
         return batch
 
     def word_shuffle(self, x, l, lang_id):

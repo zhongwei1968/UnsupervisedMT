@@ -88,11 +88,15 @@ class EvaluatorMT(object):
         """
         assert data_type in ['valid']
         speech_direction = (lang1, lang2)
+        lang2_id = self.params.lang2id[lang2]
+
         iterator = build_dataset_iter(
             lazily_load_dataset(data_type, self.params.speech_dataset[speech_direction][0]),
                                         self.params.speech_fields[speech_direction], self.params, False)
         iterator = iter(iterator)
         for batch in iterator:
+            bos_index = self.params.bos_index[lang2_id]
+            batch.tgt[0] = bos_index
             yield batch
 
     def create_reference_files(self):
@@ -140,12 +144,19 @@ class EvaluatorMT(object):
                 params.ref_paths[(lang1, lang2, data_type)] = lang2_path
 
         for lang1, lang2 in self.params.speech_dataset.keys():
+            index = 0
+            lang2_id = params.lang2id[lang2]
+            try:
                 data_type = 'valid'
                 lang_path = os.path.join(params.dump_path, 'speech-ref.{0}-{1}.{2}.txt'.format(lang1, lang2, data_type))
                 lang_txt = []
                 for speech_batch in self.get_speech_iterator(data_type, lang1, lang2):
-                    for index in speech_batch.indices:
-                        lang_txt.extend(' '.join(speech_batch.dataset.examples[index].tgt))
+                    tgt_lengths = torch.ones((2,), dtype=torch.int32)
+                    tgt_lengths = tgt_lengths.new_full((speech_batch.tgt.size(1),), len(speech_batch.tgt))
+                    lang_txt.extend(convert_to_text(speech_batch.tgt, tgt_lengths, self.dico[lang2], lang2_id, params))
+
+                    #for index in speech_batch.indices:
+                    #    lang_txt.extend(' '.join(speech_batch.dataset.examples[index].tgt))
                 # replace <unk> by <<unk>> as these tokens cannot be counted in BLEU
                 lang_txt = [x.replace('<unk>', '<<unk>>') for x in lang_txt]
 
@@ -156,7 +167,10 @@ class EvaluatorMT(object):
                 restore_segmentation(lang_path)
                 # store data paths
                 params.ref_paths[(lang1, lang2, 'speech-'+ data_type)] = lang_path
-
+            except IndexError:
+                # Output expected IndexErrors.
+                sys.stderr.write('error line: ' + str(index) + '\n')
+                raise
 
     def eval_para(self, lang1, lang2, data_type, scores):
         """
