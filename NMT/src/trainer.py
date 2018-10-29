@@ -864,6 +864,8 @@ class TrainerMT(MultiprocessingEventLoop):
                 mean_loss.append(('XE-%s-%s' % (lang, lang), 'xe_costs_%s_%s' % (lang, lang)))
             for lang1, lang2 in self.params.para_directions:
                 mean_loss.append(('XE-%s-%s' % (lang1, lang2), 'xe_costs_%s_%s' % (lang1, lang2)))
+            for lang1, lang2 in self.params.speech_directions:
+                mean_loss.append(('XE-SP-%s-%s' % (lang1, lang2), 'xe_costs_sp_%s_%s' % (lang1, lang2)))
             for lang1, lang2 in self.params.back_directions:
                 mean_loss.append(('XE-BT-%s-%s' % (lang1, lang2), 'xe_costs_bt_%s_%s' % (lang1, lang2)))
             for lang1, lang2, lang3 in self.params.pivo_directions:
