@@ -587,6 +587,7 @@ class TrainerMT(MultiprocessingEventLoop):
             sent2 = speech_batch.tgt
             len2 = torch.ones((2,), dtype=torch.int32)
             len2 = len2.new_full((sent2.size(1), ), len(sent2))
+            # print('speech:' + str(speech_batch.src.size()) + ' sent:' + str(sent2.size()))
             if self.params.cuda:  # CUDA is True
                 speech_batch.src = speech_batch.src.cuda()
                 sent2 = sent2.cuda()
@@ -844,7 +845,8 @@ class TrainerMT(MultiprocessingEventLoop):
         """
         self.n_iter += 1
         self.n_total_iter += 1
-        n_batches = len(self.params.mono_directions) + len(self.params.para_directions) + len(self.params.back_directions) + len(self.params.pivo_directions)
+        n_batches = len(self.params.mono_directions) + len(self.params.para_directions) + len(self.params.back_directions) \
+                    + len(self.params.pivo_directions) + len(self.params.speech_directions)
         self.n_sentences += n_batches * self.params.batch_size
         self.print_stats()
         update_lambdas(self.params, self.n_total_iter)
