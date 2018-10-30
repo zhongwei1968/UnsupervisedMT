@@ -469,7 +469,8 @@ def check_all_data_params(params):
         assert (lang1, lang2) in params.back_directions
 
     # check there is at least one direction / some data
-    assert len(params.mono_directions) + len(params.para_directions) + len(params.pivo_directions) > 0
+    assert len(params.mono_directions) + len(params.para_directions) + len(params.pivo_directions) \
+           + len(params.speech_directions) > 0
     assert not params.n_mono == params.n_para == 0
 
     # check vocabulary parameters
@@ -482,7 +483,10 @@ def check_all_data_params(params):
 
     # check coefficients
     assert not (params.lambda_dis == "0") ^ (params.n_dis == 0)
+    if len(params.mono_directions) == 0:
+        params.lambda_xe_mono = "0"
     assert not (params.lambda_xe_mono == "0") ^ (len(params.mono_directions) == 0)
+
     assert not (params.lambda_xe_para == "0") ^ (len(params.para_directions) == 0)
     assert not (params.lambda_speech == "0") ^ (len(params.speech_directions) == 0)
     assert not (params.lambda_xe_back == "0") ^ (len(params.back_directions) == 0)
@@ -494,9 +498,10 @@ def check_all_data_params(params):
     assert params.max_len > 0
     assert params.max_vocab == -1 or params.max_vocab > 0
     if len(params.mono_directions) == 0:
-        assert params.word_shuffle == 0
-        assert params.word_dropout == 0
-        assert params.word_blank == 0
+        #assert params.word_shuffle == 0
+        #assert params.word_dropout == 0
+        #assert params.word_blank == 0
+        assert True
     else:
         assert params.word_shuffle == 0 or params.word_shuffle > 1
         assert 0 <= params.word_dropout < 1
