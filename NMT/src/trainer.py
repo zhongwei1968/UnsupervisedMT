@@ -45,8 +45,8 @@ class TrainerMT(MultiprocessingEventLoop):
         self.params = params
         self.train_iter = None
         self.speech_fields = dict()
+        self.train_encoder = True
         params.speech_fields = self.speech_fields
-
 
         # initialization for on-the-fly generation/training
         if len(params.pivo_directions) > 0:
@@ -526,6 +526,7 @@ class TrainerMT(MultiprocessingEventLoop):
         if self.params.cuda:  # CUDA is True
             sent1, sent2 = sent1.cuda(), sent2.cuda()
 
+        self.train_encoder_parameters(True)
         # encoded states
         encoded = self.encoder(sent1, len1, lang1_id)
         self.stats['enc_norms_%s' % lang1].append(encoded.dis_input.data.norm(2, 1).mean())
@@ -568,6 +569,21 @@ class TrainerMT(MultiprocessingEventLoop):
         self.stats['processed_w'] += len2.sum()
 
 
+    def train_encoder_parameters(self, is_train=True):
+        found_audio = False
+        if self.train_encoder == is_train:
+            return
+        self.train_encoder = is_train
+        for name, param in self.encoder.named_parameters():
+            if not found_audio  and name.startswith('audio_enc'):
+                found_audio = True
+                if param.requires_grad == is_train:
+                    return
+            if name.startswith('embeddings') and self.params.freeze_enc_emb:
+                continue
+            param.requires_grad = is_train
+
+
     def speech_enc_dec_step(self,  lang1, lang2, lambda_xe):
         """
         Source / target autoencoder training (parallel data):
@@ -591,6 +607,12 @@ class TrainerMT(MultiprocessingEventLoop):
             if self.params.cuda:  # CUDA is True
                 speech_batch.src = speech_batch.src.cuda()
                 sent2 = sent2.cuda()
+
+            if lang2_id == 1:
+                self.train_encoder_parameters(False)
+            else:
+                self.train_encoder_parameters(True)
+
             # encoded states
             encoded = self.encoder(speech_batch.src, 0, lang1_id)
 
