@@ -49,7 +49,6 @@ class TransformerEncoder(nn.Module):
         self.audio_enc = None
         if args.speech_input:
             self.audio_enc = AudioEncoder(args.sample_rate, args.window_size, embed_dim)
-            embeddings[1] = None
 
         self.embeddings = nn.ModuleList(embeddings)
         self.freeze_enc_emb = args.freeze_enc_emb
@@ -85,7 +84,7 @@ class TransformerEncoder(nn.Module):
         is_cuda = src_tokens.is_cuda
 
         embed_tokens = self.embeddings[lang_id]
-        if not embed_tokens:
+        if self.audio_enc and lang_id == 1:
             embed_tokens = self.audio_enc
             x = embed_tokens(src_tokens)
             x_pos = x[:, :, 0].type('torch.LongTensor')
