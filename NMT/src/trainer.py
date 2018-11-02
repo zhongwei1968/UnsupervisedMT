@@ -528,6 +528,8 @@ class TrainerMT(MultiprocessingEventLoop):
 
         self.train_encoder_parameters(True)
         self.check_encoder_grad(True)
+        self.decoder.train_decoder_parameters(True, 0)
+
         # encoded states
         encoded = self.encoder(sent1, len1, lang1_id)
         self.stats['enc_norms_%s' % lang1].append(encoded.dis_input.data.norm(2, 1).mean())
