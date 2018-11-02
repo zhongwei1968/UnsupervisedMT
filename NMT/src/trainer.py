@@ -527,6 +527,7 @@ class TrainerMT(MultiprocessingEventLoop):
             sent1, sent2 = sent1.cuda(), sent2.cuda()
 
         self.train_encoder_parameters(True)
+        self.check_encoder_grad(True)
         # encoded states
         encoded = self.encoder(sent1, len1, lang1_id)
         self.stats['enc_norms_%s' % lang1].append(encoded.dis_input.data.norm(2, 1).mean())
@@ -579,10 +580,16 @@ class TrainerMT(MultiprocessingEventLoop):
                 found_audio = True
                 if param.requires_grad == is_train:
                     return
-            if name.startswith('embeddings') and self.params.freeze_enc_emb:
-                continue
+            #if name.startswith('embeddings') and self.params.freeze_enc_emb:
+            #    continue
             param.requires_grad = is_train
 
+    def check_encoder_grad(self, is_train=True):
+        assert self.train_encoder == is_train
+        for name, param in self.encoder.named_parameters():
+            if param.requires_grad != is_train:
+                print(name + ': ' + str(param.requires_grad))
+            assert param.requires_grad == is_train
 
     def speech_enc_dec_step(self,  lang1, lang2, lambda_xe):
         """
@@ -610,8 +617,12 @@ class TrainerMT(MultiprocessingEventLoop):
 
             if lang2_id == 1:
                 self.train_encoder_parameters(False)
+                self.check_encoder_grad(False)
+                self.decoder.train_decoder_parameters(False,0)
             else:
                 self.train_encoder_parameters(True)
+                self.check_encoder_grad(True)
+                self.decoder.train_decoder_parameters(True,0)
 
             # encoded states
             encoded = self.encoder(speech_batch.src, 0, lang1_id)

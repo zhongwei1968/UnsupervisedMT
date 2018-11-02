@@ -157,6 +157,11 @@ class TransformerDecoder(nn.Module):
         # words allowed for generation
         self.vocab_mask_neg = args.vocab_mask_neg if len(args.vocab) > 0 else None  # TODO: implement
 
+        self.train_status = []
+        for i in range(self.n_langs):
+            self.train_status.append(True)
+
+
         # embedding layers
         self.emb_dim = args.decoder_embed_dim
         if self.share_encdec_emb:
@@ -248,6 +253,25 @@ class TransformerDecoder(nn.Module):
         x = proj_layer(x)
 
         return x
+
+    def train_decoder_parameters(self, is_train=True, lang_id=0):
+        if self.train_status[lang_id] == is_train:
+            return
+        self.train_status[lang_id] = is_train
+
+        for name, param in self.named_parameters():
+            if self.is_lang_id(name ,lang_id):
+                param.requires_grad = is_train
+
+    def is_lang_id(self, name, id):
+        if name.startswith('embeddings.' + str(id)):
+            return True
+        elif name.startswith('proj.' + str(id)):
+            return True
+        elif name.startswith('layers.'):
+            if name[len('layers.?.')] ==  str(id):
+                return True
+        return False
 
     def max_positions(self):
         """Maximum output length supported by the decoder."""

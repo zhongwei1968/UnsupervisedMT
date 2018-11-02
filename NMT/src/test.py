@@ -37,6 +37,8 @@ def test_sharing(encoder, decoder, lm, params):
     # frozen parameters
     if params.freeze_enc_emb:
         for i in range(params.n_langs):
+            if params.speech_input and i > 0:
+                break
             k = 'enc_emb_%i' % i
             if k in hashs:
                 assert hash_data(encoder.embeddings[i].weight) == hashs[k]

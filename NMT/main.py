@@ -320,6 +320,7 @@ if __name__ == '__main__':
                 for lang1, lang2 in params.speech_directions:
                     trainer.speech_enc_dec_step(lang1, lang2, params.lambda_speech)
                 trainer.train_encoder_parameters(True)
+                trainer.check_encoder_grad(True)
 
             # MT training (back-parallel data)
             if params.lambda_xe_back > 0:
