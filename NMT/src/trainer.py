@@ -985,11 +985,13 @@ class TrainerMT(MultiprocessingEventLoop):
         Save best models according to given validation metrics.
         """
         for metric in self.VALIDATION_METRICS:
-            if scores[metric] > self.best_metrics[metric]:
+            if metric in self.best_metrics.keys():
+              if scores[metric] > self.best_metrics[metric]:
                 self.best_metrics[metric] = scores[metric]
                 logger.info('New best score for %s: %.6f' % (metric, scores[metric]))
                 self.save_model('best-%s' % metric)
-
+            else:
+                self.best_metrics = {metric: -1e12 for metric in self.VALIDATION_METRICS}
     def save_periodic(self):
         """
         Save the models periodically.
