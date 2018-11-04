@@ -115,7 +115,10 @@ def initialize_embeddings(encoder, decoder, params, data):
 
         # define dictionary / parameters to update
         dico = data['dico'][lang]
-        to_update = [encoder.embeddings[i].weight.data]
+        if i == 0:
+            to_update = [encoder.embeddings[i].weight.data]
+        else:
+            to_update = []
         if not params.share_encdec_emb:
             to_update.append(decoder.embeddings[i].weight.data)
         if not params.share_decpro_emb and params.pretrained_out:

@@ -57,7 +57,7 @@ class TrainerMT(MultiprocessingEventLoop):
         for i in range(params.n_langs):
             if params.share_lang_emb and i >= 0:
                 break
-            assert enc_params[i].size() == (params.n_words[i], params.emb_dim)
+            #assert enc_params[i].size() == (params.n_words[i], params.emb_dim)
         if self.params.share_encdec_emb:
             to_ignore = 1 if params.share_lang_emb else params.n_langs
             enc_params = enc_params[to_ignore:]
@@ -590,8 +590,13 @@ class TrainerMT(MultiprocessingEventLoop):
             if self.params.cuda:  # CUDA is True
                 speech_batch.src = speech_batch.src.cuda()
                 sent2 = sent2.cuda()
-            # encoded states
-            encoded = self.encoder(speech_batch.src, 0, lang1_id)
+
+            if lang2_id == 1:
+                with torch.no_grad():
+                    # encoded states
+                    encoded = self.encoder(speech_batch.src, 0, lang1_id)
+            else:
+                encoded = self.encoder(speech_batch.src, 0, lang1_id)
 
             # cross-entropy scores / loss
             scores = self.decoder(encoded, sent2[:-1], lang2_id)

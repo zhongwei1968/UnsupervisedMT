@@ -369,7 +369,8 @@ class EvaluatorMT(object):
 
             for lang1, lang2 in self.data['para'].keys():
                 for data_type in ['valid']:
-                    self.eval_para(lang1, lang2, data_type, scores)
+                    #self.eval_para(lang1, lang2, data_type, scores)
+                    pass
             for lang1, lang2 in self.params.speech_dataset.keys():
                 for data_type in ['valid']:
                     self.eval_speech(lang1, lang2, data_type, scores)
