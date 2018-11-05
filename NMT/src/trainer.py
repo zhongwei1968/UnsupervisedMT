@@ -10,6 +10,7 @@ import time
 from logging import getLogger
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.nn import functional as F
 from torch.nn.utils import clip_grad_norm_
 
@@ -972,6 +973,15 @@ class TrainerMT(MultiprocessingEventLoop):
             'lm': (self.lm, self.lm_optimizer),
         }
         logger.warning('Checkpoint reloaded. Resuming at epoch %i ...' % self.epoch)
+        self.check_checkpoint()
+
+    def check_checkpoint(self):
+        """
+        check checkpoint parameter after reload a checkpoint. this is for compatibility
+        """
+        if not isinstance(self.decoder.embed_positions, nn.ModuleList):
+            embed_positions = [self.decoder.embed_positions for _ in range(self.decoder.n_langs)]
+            self.decoder.embed_positions = nn.ModuleList(embed_positions)
 
     def test_sharing(self):
         """
