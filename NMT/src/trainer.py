@@ -47,6 +47,15 @@ class TrainerMT(MultiprocessingEventLoop):
         self.train_iter = None
         self.speech_fields = dict()
         params.speech_fields = self.speech_fields
+        # training variables
+        self.best_metrics = {metric: -1e12 for metric in self.VALIDATION_METRICS}
+        self.epoch = 0
+        self.n_total_iter = 0
+        self.freeze_enc_emb = self.params.freeze_enc_emb
+        self.freeze_dec_emb = self.params.freeze_dec_emb
+
+
+        self.reload_model()
 
         # initialization for on-the-fly generation/training
         if len(params.pivo_directions) > 0:
@@ -102,13 +111,6 @@ class TrainerMT(MultiprocessingEventLoop):
             self.best_stopping_criterion = -1e12
             assert len(self.VALIDATION_METRICS) == 0
             self.VALIDATION_METRICS.append(self.stopping_criterion)
-
-        # training variables
-        self.best_metrics = {metric: -1e12 for metric in self.VALIDATION_METRICS}
-        self.epoch = 0
-        self.n_total_iter = 0
-        self.freeze_enc_emb = self.params.freeze_enc_emb
-        self.freeze_dec_emb = self.params.freeze_dec_emb
 
         # training statistics
         self.n_iter = 0
@@ -581,6 +583,7 @@ class TrainerMT(MultiprocessingEventLoop):
         lang2_id = params.lang2id[lang2]
         loss_fn = self.decoder.loss_fn[lang2_id]
         n_words = params.n_words[lang2_id]
+        #logger.info("speech_enc_dec_step: %s to %s " % (lang1, lang2))
 
         speech_batch = self.get_speech_batch('train', lang1, lang2)
         if speech_batch:
@@ -628,6 +631,7 @@ class TrainerMT(MultiprocessingEventLoop):
             self.zero_grad(['enc', 'dec'])
             loss.backward()
             self.update_params(['enc', 'dec'])
+            #self.check_encoder_parameters()
 
             # number of processed sentences / words
             self.stats['processed_s'] += len2.size(0)
@@ -916,10 +920,10 @@ class TrainerMT(MultiprocessingEventLoop):
         path = os.path.join(self.params.dump_path, '%s.pth' % name)
         logger.info('Saving model to %s ...' % path)
         torch.save({
-            'enc': self.encoder,
-            'dec': self.decoder,
-            'dis': self.discriminator,
-            'lm': self.lm,
+            'enc': self.encoder.state_dict(),
+            'dec': self.decoder.state_dict(),
+            'dis': self.discriminator.state_dict() if self.discriminator else None,
+            'lm': self.lm.state_dict() if self.lm else None,
         }, path)
 
     def save_checkpoint(self):
@@ -927,8 +931,8 @@ class TrainerMT(MultiprocessingEventLoop):
         Checkpoint the experiment.
         """
         checkpoint_data = {
-            'encoder': self.encoder,
-            'decoder': self.decoder,
+            'encoder': self.encoder.state_dict(),
+            'decoder': self.decoder.state_dict(),
             'discriminator': self.discriminator,
             'lm': self.lm,
             'enc_optimizer': self.enc_optimizer,
@@ -944,6 +948,25 @@ class TrainerMT(MultiprocessingEventLoop):
         logger.info("Saving checkpoint to %s ..." % checkpoint_path)
         torch.save(checkpoint_data, checkpoint_path)
 
+    def reload_model(self):
+        """
+        Reload model from  a checkpoint if we find one.
+        """
+        # reload model from checkpoint
+        checkpoint_path = os.path.join(self.params.dump_path, 'checkpoint.pth')
+        if not os.path.isfile(checkpoint_path):
+            return
+        logger.warning('Reloading model from checkpoint from %s ...' % checkpoint_path)
+        checkpoint_data = torch.load(checkpoint_path)
+        self.encoder.load_state_dict(checkpoint_data['encoder'])
+        self.decoder.load_state_dict(checkpoint_data['decoder'])
+        self.epoch = checkpoint_data['epoch']
+        self.n_total_iter = checkpoint_data['n_total_iter']
+        self.best_metrics = checkpoint_data['best_metrics']
+        self.best_stopping_criterion = checkpoint_data['best_stopping_criterion']
+
+
+
     def reload_checkpoint(self):
         """
         Reload a checkpoint if we find one.
@@ -954,8 +977,8 @@ class TrainerMT(MultiprocessingEventLoop):
             return
         logger.warning('Reloading checkpoint from %s ...' % checkpoint_path)
         checkpoint_data = torch.load(checkpoint_path)
-        self.encoder = checkpoint_data['encoder']
-        self.decoder = checkpoint_data['decoder']
+        self.encoder.load_state_dict(checkpoint_data['encoder'])
+        self.decoder.load_state_dict(checkpoint_data['decoder'])
         self.discriminator = checkpoint_data['discriminator']
         self.lm = checkpoint_data['lm']
         self.enc_optimizer = checkpoint_data['enc_optimizer']
@@ -973,15 +996,13 @@ class TrainerMT(MultiprocessingEventLoop):
             'lm': (self.lm, self.lm_optimizer),
         }
         logger.warning('Checkpoint reloaded. Resuming at epoch %i ...' % self.epoch)
-        self.check_checkpoint()
 
     def check_checkpoint(self):
         """
         check checkpoint parameter after reload a checkpoint. this is for compatibility
         """
         if not isinstance(self.decoder.embed_positions, nn.ModuleList):
-            embed_positions = [self.decoder.embed_positions for _ in range(self.decoder.n_langs)]
-            self.decoder.embed_positions = nn.ModuleList(embed_positions)
+            pass
 
     def test_sharing(self):
         """
@@ -1030,3 +1051,9 @@ class TrainerMT(MultiprocessingEventLoop):
                 exit()
         self.epoch += 1
         self.save_checkpoint()
+
+    def check_encoder_parameters(self, is_train=True):
+        logger.handlers[0].flush()
+        for name, param in self.decoder.named_parameters():
+            print( name,  param.grad)
+

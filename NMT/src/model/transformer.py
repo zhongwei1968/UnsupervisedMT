@@ -173,9 +173,8 @@ class TransformerDecoder(nn.Module):
             embeddings = nn.ModuleList(embeddings)
         self.embeddings = embeddings
         self.embed_scale = math.sqrt(self.emb_dim)
-        embed_positions = [PositionalEmbedding( 1024, self.emb_dim, self.pad_index,
-            left_pad=args.left_pad_target,) for _ in range(self.n_langs)]
-        self.embed_positions = nn.ModuleList(embed_positions)
+        self.embed_positions = PositionalEmbedding( 1024, self.emb_dim, self.pad_index,
+            left_pad=args.left_pad_target,)
 
         self.layers = nn.ModuleList()
         for k in range(args.decoder_layers):
@@ -223,11 +222,10 @@ class TransformerDecoder(nn.Module):
         encoder_out = encoded.dec_input
         embed_tokens = self.embeddings[lang_id]
         proj_layer = self.proj[lang_id]
-        embed_positions = self.embed_positions[lang_id]
 
 
         # embed positions
-        positions = embed_positions(prev_output_tokens, incremental_state)
+        positions = self.embed_positions(prev_output_tokens, incremental_state)
 
         # embed tokens and positions
         if incremental_state is not None:
@@ -254,7 +252,7 @@ class TransformerDecoder(nn.Module):
 
     def max_positions(self):
         """Maximum output length supported by the decoder."""
-        return self.embed_positions[0].max_positions()
+        return self.embed_positions.max_positions()
 
     def reorder_incremental_state_(self, incremental_state, new_order):
         """Reorder incremental state.
