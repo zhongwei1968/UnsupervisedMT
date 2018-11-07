@@ -291,6 +291,14 @@ if __name__ == '__main__':
         params.epoch_size = params.n_para
     assert params.epoch_size > 0
 
+    # if load from checkpoint, run evals first, this is bug if not running evaluator before training.
+    if trainer.epoch > 1:
+        scores = evaluator.run_all_evals(trainer.epoch)
+        # print / JSON log
+        for k, v in scores.items():
+            logger.info('%s -> %.6f' % (k, v))
+        logger.info("__log__:%s" % json.dumps(scores))
+
     # start training
     for _ in range(trainer.epoch, params.max_epoch):
 
